@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Temperature History</title>
+
+        <!-- Shared site-wide stylesheet -->
+        <link rel="stylesheet" href="/weather-common.css" />
+
+        <!-- Garden chart engine -->
+        <script src="common_history.js"></script>
+    </head>
+
+    <body>
+        <div id="container">
+            <h1>Temperature History</h1>
+            <div class="meta">Daily min, max, and smoothed midpoint</div>
+
+            <canvas
+                id="tempCanvas"
+                class="history-canvas"
+                width="1000"
+                height="450"
+            ></canvas>
+            <div id="status">Loading temperature history...</div>
+        </div>
+
+        <script>
+            ENDPOINT_URL = "/api/v2/history/temperature";
+
+            //   const ENDPOINT_URL = "http://weather:8889/api/v2/history/temperature";
+
+            const SMOOTH_WINDOW = 5;
+            const MIN_DAILY_RANGE = 3;
+            const DROP_EDGE_DAYS = true;
+
+            const statusEl = document.getElementById("status");
+
+            function setStatus(msg, isError) {
+                statusEl.innerHTML = msg.replace(/\n/g, "<br>");
+                statusEl.className = isError ? "error" : "";
+            }
+
+            async function fetchData() {
+                try {
+                    const resp = await fetch(ENDPOINT_URL);
+                    if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+                    const data = await resp.json();
+                    window.tempHistoryData = data ?? {};
+
+                    if (!data.days || !Array.isArray(data.days))
+                        throw new Error("Unexpected JSON structure");
+
+                    const rawPoints = data.days.map((d) => ({
+                        ts: d.day,
+                        date:
+                            typeof d.day === "number"
+                                ? new Date(d.day * 1000)
+                                : null,
+                        high: d.temp_high_F,
+                        low: d.temp_low_F,
+                    }));
+
+                    const cleaned = cleanDailyData(rawPoints);
+                    const smoothed = smoothData(cleaned, SMOOTH_WINDOW);
+
+                    if (!cleaned.length) {
+                        setStatus("No valid temperature data.", true);
+                        return;
+                    }
+
+                    // ---------------------------
+                    // Build garden-style records[]
+                    // ---------------------------
+                    // A = Bars from cleaned[]
+                    //     Midline from smoothed[]
+                    // ---------------------------
+
+                    const records = cleaned.map((c, i) => {
+                        const s = smoothed[i] || smoothed[smoothed.length - 1];
+
+                        const mid = (s.high + s.low) / 2;
+
+                        return {
+                            t: c.date,
+                            min: c.low,
+                            max: c.high,
+                            mid: mid,
+                        };
+                    });
+
+                    // Scale like CommonHistory expects
+                    const range = CommonHistory.autoScale(records);
+
+                    // Render the garden-style chart
+                    CommonHistory.renderHistoryChart({
+                        canvasId: "tempCanvas",
+                        records,
+                        range,
+                        unit: "°F",
+                    });
+
+                    // Status footer
+                    const first = records[0].t.toLocaleDateString(undefined, {
+                        month: "short",
+                        year: "numeric",
+                    });
+                    const last = records[
+                        records.length - 1
+                    ].t.toLocaleDateString(undefined, {
+                        month: "short",
+                        year: "numeric",
+                    });
+
+                    const maxDay = smoothed.reduce((a, b) =>
+                        a.high > b.high ? a : b,
+                    );
+                    const minDay = smoothed.reduce((a, b) =>
+                        a.low < b.low ? a : b,
+                    );
+
+                    const line1 =
+                        "Showing " +
+                        smoothed.length +
+                        " smoothed days (window " +
+                        SMOOTH_WINDOW +
+                        ") from " +
+                        first +
+                        " to " +
+                        last +
+                        ".";
+
+                    const line2 =
+                        "Max high " +
+                        maxDay.high.toFixed(1) +
+                        " °F (" +
+                        maxDay.date.toLocaleDateString() +
+                        "), " +
+                        "min low " +
+                        minDay.low.toFixed(1) +
+                        " °F (" +
+                        minDay.date.toLocaleDateString() +
+                        ").";
+
+                    setStatus(line1 + "\n" + line2);
+                } catch (err) {
+                    console.error(err);
+                    setStatus("Error loading data: " + err.message, true);
+                }
+            }
+
+            function cleanDailyData(raw) {
+                const out = [];
+                for (let i = 0; i < raw.length; i++) {
+                    const p = raw[i];
+                    if (!p.date) continue;
+                    if (DROP_EDGE_DAYS && (i === 0 || i === raw.length - 1))
+                        continue;
+                    if (p.high == null || p.low == null) continue;
+                    if (p.high < p.low) continue;
+
+                    const range = p.high - p.low;
+                    if (range < MIN_DAILY_RANGE || range > 50) continue;
+
+                    const prev = out[out.length - 1];
+                    if (prev && prev.high === p.high && prev.low === p.low)
+                        continue;
+
+                    out.push(p);
+                }
+                return out;
+            }
+
+            function smoothData(points, w) {
+                if (!points.length) return [];
+                const half = Math.floor(w / 2);
+                const out = [];
+
+                for (let i = 0; i < points.length; i++) {
+                    let sumH = 0,
+                        sumL = 0,
+                        c = 0;
+                    const s = Math.max(0, i - half);
+                    const e = Math.min(points.length - 1, i + half);
+
+                    for (let j = s; j <= e; j++) {
+                        const p = points[j];
+                        if (p.high != null && p.low != null) {
+                            sumH += p.high;
+                            sumL += p.low;
+                            c++;
+                        }
+                    }
+                    if (!c) continue;
+
+                    out.push({
+                        ts: points[i].ts,
+                        date: points[i].date,
+                        high: sumH / c,
+                        low: sumL / c,
+                    });
+                }
+                return out;
+            }
+
+            function computeStats(points) {
+                let maxHigh = -Infinity,
+                    minLow = Infinity;
+                let maxHighDate = "n/a",
+                    minLowDate = "n/a";
+
+                for (const p of points) {
+                    if (p.high > maxHigh) {
+                        maxHigh = p.high;
+                        maxHighDate = p.date.toLocaleDateString();
+                    }
+                    if (p.low < minLow) {
+                        minLow = p.low;
+                        minLowDate = p.date.toLocaleDateString();
+                    }
+                }
+                return { maxHigh, minLow, maxHighDate, minLowDate };
+            }
+
+            function computeMonthlySummary(points) {
+                // kept intact — not used by renderer but preserved
+                return new Map();
+            }
+
+            fetchData();
+        </script>
+
+        <div style="margin-top: 20px">
+            <button id="downloadCsvBtn">Download CSV</button>
+        </div>
+
+        <script>
+            document
+                .getElementById("downloadCsvBtn")
+                .addEventListener("click", function () {
+                    if (typeof exportTemperatureHistoryToCsv === "function") {
+                        exportTemperatureHistoryToCsv();
+                    } else {
+                        alert("CSV export function not found.");
+                    }
+                });
+        </script>
+    </body>
+</html>

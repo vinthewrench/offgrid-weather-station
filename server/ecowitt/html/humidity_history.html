@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Humidity History</title>
+
+        <!-- Shared site-wide stylesheet -->
+        <!-- Use either /weather-common.css or weather-common.css depending on deployment -->
+        <link rel="stylesheet" href="/weather-common.css" />
+
+        <!-- Garden chart engine -->
+        <script src="common_history.js"></script>
+    </head>
+
+    <body>
+        <div id="container">
+            <h1>Humidity History</h1>
+            <div class="meta">Daily min, max, and smoothed midpoint</div>
+
+            <canvas
+                id="humidityCanvas"
+                class="history-canvas"
+                width="1000"
+                height="450"
+            ></canvas>
+            <div id="status">Loading humidity history...</div>
+        </div>
+
+        <script>
+            //  const ENDPOINT_URL = "http://weather:8889/api/v2/history/humidity";
+            const ENDPOINT_URL = "/api/v2/history/humidity";
+
+            const SMOOTH_WINDOW = 5;
+            const MIN_DAILY_RANGE = 2;
+            const MAX_DAILY_RANGE = 60;
+            const DROP_EDGE_DAYS = true;
+
+            const statusEl = document.getElementById("status");
+            const canvas = document.getElementById("humidityCanvas");
+
+            function setStatus(msg, isError) {
+                statusEl.innerHTML = msg.replace(/\n/g, "<br>");
+                statusEl.className = isError ? "error" : "";
+            }
+
+            async function fetchData() {
+                try {
+                    const resp = await fetch(ENDPOINT_URL);
+                    if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+                    const data = await resp.json();
+                    window.humidityHistoryData = data ?? {};
+
+                    if (!data.days || !Array.isArray(data.days))
+                        throw new Error("Unexpected JSON shape");
+
+                    const raw = data.days.map((d) => ({
+                        ts: d.day,
+                        date:
+                            typeof d.day === "number"
+                                ? new Date(d.day * 1000)
+                                : null,
+                        high: d.humidity_high,
+                        low: d.humidity_low,
+                    }));
+
+                    const cleaned = cleanDailyData(raw);
+                    const smoothed = smoothData(cleaned, SMOOTH_WINDOW);
+
+                    if (!cleaned.length) {
+                        setStatus("No valid humidity data.", true);
+                        return;
+                    }
+
+                    // ---------------------------
+                    // Build Garden-style records[]
+                    // ---------------------------
+                    const records = cleaned.map((c, i) => {
+                        const s = smoothed[i] || smoothed[smoothed.length - 1];
+                        return {
+                            t: c.date,
+                            min: c.low,
+                            max: c.high,
+                            mid: (s.low + s.high) / 2,
+                        };
+                    });
+
+                    const range = CommonHistory.autoScale(records);
+
+                    CommonHistory.renderHistoryChart({
+                        canvasId: "humidityCanvas",
+                        records,
+                        range,
+                        unit: "%",
+                    });
+
+                    // Status footer
+                    const first = records[0].t.toLocaleDateString(undefined, {
+                        month: "short",
+                        year: "numeric",
+                    });
+                    const last = records[
+                        records.length - 1
+                    ].t.toLocaleDateString(undefined, {
+                        month: "short",
+                        year: "numeric",
+                    });
+
+                    const maxDay = smoothed.reduce((a, b) =>
+                        a.high > b.high ? a : b,
+                    );
+                    const minDay = smoothed.reduce((a, b) =>
+                        a.low < b.low ? a : b,
+                    );
+
+                    const line1 =
+                        "Showing " +
+                        smoothed.length +
+                        " smoothed days (window " +
+                        SMOOTH_WINDOW +
+                        ") from " +
+                        first +
+                        " to " +
+                        last +
+                        ".";
+
+                    const line2 =
+                        "Max high " +
+                        maxDay.high.toFixed(1) +
+                        " % (" +
+                        maxDay.date.toLocaleDateString() +
+                        "), " +
+                        "min low " +
+                        minDay.low.toFixed(1) +
+                        " % (" +
+                        minDay.date.toLocaleDateString() +
+                        ").";
+
+                    setStatus(line1 + "\n" + line2);
+                } catch (err) {
+                    console.error(err);
+                    setStatus("Error loading data: " + err.message, true);
+                }
+            }
+
+            function cleanDailyData(raw) {
+                const out = [];
+                for (let i = 0; i < raw.length; i++) {
+                    const p = raw[i];
+                    if (!p.date) continue;
+                    if (DROP_EDGE_DAYS && (i === 0 || i === raw.length - 1))
+                        continue;
+                    if (p.high == null || p.low == null) continue;
+                    if (p.high < p.low) continue;
+
+                    const range = p.high - p.low;
+                    if (range < MIN_DAILY_RANGE || range > MAX_DAILY_RANGE)
+                        continue;
+
+                    if (p.high < 0 || p.high > 100) continue;
+                    if (p.low < 0 || p.low > 100) continue;
+
+                    const prev = out[out.length - 1];
+                    if (prev && prev.high === p.high && prev.low === p.low)
+                        continue;
+
+                    out.push(p);
+                }
+                return out;
+            }
+
+            function smoothData(points, w) {
+                if (!points.length) return [];
+                const half = Math.floor(w / 2);
+                const out = [];
+
+                for (let i = 0; i < points.length; i++) {
+                    let sumH = 0,
+                        sumL = 0,
+                        c = 0;
+
+                    for (
+                        let j = Math.max(0, i - half);
+                        j <= Math.min(points.length - 1, i + half);
+                        j++
+                    ) {
+                        const p = points[j];
+                        if (p.high == null || p.low == null) continue;
+                        sumH += p.high;
+                        sumL += p.low;
+                        c++;
+                    }
+
+                    if (!c) continue;
+
+                    out.push({
+                        ts: points[i].ts,
+                        date: points[i].date,
+                        high: sumH / c,
+                        low: sumL / c,
+                    });
+                }
+                return out;
+            }
+
+            fetchData();
+        </script>
+
+        <button id="downloadHumidityCsvBtn">Download CSV</button>
+
+        <script>
+            document
+                .getElementById("downloadHumidityCsvBtn")
+                .addEventListener("click", function () {
+                    if (typeof exportHumidityHistoryToCsv === "function") {
+                        exportHumidityHistoryToCsv();
+                    } else {
+                        alert("CSV export function not found.");
+                    }
+                });
+        </script>
+    </body>
+</html>

@@ -1,0 +1,1156 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>WS90 Weather System</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+        <link rel="stylesheet" href="/weather-common.css" />
+
+        <style>
+            .no-data {
+                color: #ff6b6b;
+                font-weight: 600;
+            }
+
+            #ws90-status-container {
+                margin-bottom: 0.5rem;
+                font-family: sans-serif;
+                font-size: 0.9rem;
+            }
+
+            #ws90-status-detail {
+                margin-right: 0.5rem;
+            }
+
+            #ws90-last-update {
+                color: #666;
+            }
+
+            .gauge {
+                text-align: center;
+            }
+
+            .gauge-range-center {
+                text-align: center;
+            }
+
+            .history-link {
+                margin-top: 0.3rem;
+                font-size: 0.75rem;
+                color: #888;
+                text-align: right;
+                cursor: pointer;
+            }
+            .history-link:hover {
+                color: #ccc;
+                text-decoration: underline;
+            }
+
+            .astro-block {
+                background: #181820;
+                border: 1px solid #2a2a34;
+                border-radius: 10px;
+                padding: 0.6rem 0.8rem;
+            }
+
+            .sun-table {
+                margin-top: 0.4rem;
+                font-size: 0.85rem;
+                text-align: center;
+            }
+
+            .sun-row {
+                display: grid;
+                grid-template-columns: 1fr minmax(100px, 1fr) minmax(100px, 1fr);
+                column-gap: 0.35rem;
+            }
+
+            .sun-row span {
+                white-space: nowrap;
+            }
+
+            .sun-header {
+                font-weight: 600;
+                letter-spacing: 0.05em;
+                color: #ccc;
+            }
+
+            .astro-stat {
+                display: grid;
+                grid-template-columns: 150px auto;
+                column-gap: 0.5rem;
+                white-space: nowrap;
+                font-size: 0.9rem;
+            }
+
+            .moon-box {
+                padding: 0.4rem 0.4rem;
+            }
+
+            .moon-box .gauge-title {
+                margin-bottom: 0.3rem;
+            }
+
+            .moon-box > div[style*="text-align:center"] {
+                margin-top: 0.2rem !important;
+            }
+
+            /* Center moon graphic properly */
+            .moon-box #moon-phase-graphic {
+                position: relative;
+                height: 100px;
+                width: 100px;
+                margin: 0 auto;
+            }
+
+            .moon-box #moon-phase-graphic > div {
+                position: absolute !important;
+                left: 50% !important;
+                top: 50% !important;
+                transform: translate(-50%, -50%) !important;
+            }
+
+            .moon-box #moon-phase-name,
+            .moon-box #moon-illumination,
+            .moon-box #moon-waxing {
+                text-align: center;
+            }
+
+            #wind-daily {
+                text-align: center;
+                margin-top: 0.25rem;
+                font-size: 0.8rem;
+                color: #888;
+            }
+        </style>
+    </head>
+
+    <body>
+        <h1>
+            WS90 Weather System
+        </h1>
+
+        <div class="meta">
+            <span id="last-time">-</span>
+            <span id="data-status"></span>
+        </div>
+
+        <!-- TOP GAUGES ROW -->
+        <div class="gauges top-row">
+            <!-- Temperature Gauge -->
+            <div class="gauge-group">
+                <div class="gauge">
+                    <div class="gauge-title">Temperature</div>
+                    <div class="v-bar">
+                        <div
+                            class="v-bar-fill temp-bar-fill"
+                            id="temp-bar"
+                        ></div>
+                    </div>
+                    <div class="gauge-value" id="temp-val">-</div>
+                    <div class="gauge-range" id="temp-range">…</div>
+                </div>
+                <div class="gauge-range gauge-range-center" id="temp-dew">
+                    Dew point: -
+                </div>
+
+                <div
+                    class="history-link"
+                    data-target="temperature_history.html"
+                >
+                    History →
+                </div>
+            </div>
+
+            <!-- Humidity Gauge -->
+            <div class="gauge-group">
+                <div class="gauge">
+                    <div class="gauge-title">Humidity</div>
+                    <div class="v-bar">
+                        <div class="v-bar-fill hum-bar-fill" id="hum-bar"></div>
+                    </div>
+                    <div class="gauge-value" id="hum-val">-</div>
+                    <div class="gauge-range" id="hum-range">……</div>
+                </div>
+
+                <div class="history-link" data-target="humidity_history.html">
+                    History →
+                </div>
+            </div>
+
+            <!-- Wind Gauge -->
+            <div class="gauge-group">
+                <div class="gauge">
+                    <div class="gauge-title">Wind</div>
+                    <div
+                        id="wind-barb"
+                        style="height: 60px; width: 60px; margin: 0 auto"
+                    ></div>
+
+                    <div class="v-bar wind-vbar">
+                        <div
+                            class="v-bar-fill wind-bar-fill"
+                            id="wind-bar"
+                        ></div>
+                    </div>
+
+                    <div class="gauge-value" id="wind-val">-</div>
+                    <div class="gauge-range" id="wind-detail"></div>
+
+                    <div id="wind-daily">Today: - avg · - max</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECOND ROW -->
+        <div class="gauges second-row" style="margin-top: 1rem">
+            <!-- Rain Gauge -->
+            <div class="gauge-group">
+                <div
+                    class="gauge-title"
+                    style="text-align: center; margin-bottom: 0.5rem"
+                >
+                    Rain
+                </div>
+
+                <div
+                    style="
+                        display: flex;
+                        gap: 1.5rem;
+                        align-items: flex-start;
+                        justify-content: center;
+                    "
+                >
+                    <div style="text-align: center">
+                        <div id="rain-icon" style="width: 55px; margin: 0 auto">
+                            <svg
+                                id="icon-rain-off"
+                                width="55"
+                                height="55"
+                                viewBox="0 0 64 64"
+                                fill="none"
+                                stroke="#3498db"
+                                stroke-width="4"
+                                style="display: block; margin: 0 auto"
+                            >
+                                <path
+                                    d="M32 4 C20 20 12 30 12 40 A20 20 0 0 0 52 40 C52 30 44 20 32 4 Z"
+                                />
+                            </svg>
+
+                            <svg
+                                id="icon-rain-on"
+                                width="55"
+                                height="55"
+                                viewBox="0 0 64 64"
+                                fill="none"
+                                stroke="#3498db"
+                                stroke-width="4"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                style="display: none; margin: 0 auto"
+                            >
+                                <g stroke="none" fill="#3498db">
+                                    <circle cx="20" cy="0" r="1.4" />
+                                    <circle cx="26" cy="3" r="1.4" />
+                                    <circle cx="32" cy="0" r="1.4" />
+                                    <circle cx="38" cy="1" r="1.4" />
+                                    <circle cx="44" cy="3" r="1.0" />
+                                </g>
+                                <path
+                                    d="M32 4 C20 20 12 30 12 40 A20 20 0 0 0 52 40 C52 30 44 20 32 4 Z"
+                                />
+                                <defs>
+                                    <clipPath id="rain-drop-clip">
+                                        <path
+                                            d="M32 4 C20 20 12 30 12 40 A20 20 0 0 0 52 40 C52 30 44 20 32 4 Z"
+                                        />
+                                    </clipPath>
+                                </defs>
+                                <rect
+                                    x="14"
+                                    y="38"
+                                    width="36"
+                                    height="14"
+                                    fill="#3498db"
+                                    opacity="0.55"
+                                    clip-path="url(#rain-drop-clip)"
+                                />
+                            </svg>
+                        </div>
+
+                        <div
+                            id="rain-rate"
+                            style="font-size: 0.9rem; color: #aaa"
+                        >
+                            Rate: 0.00 in/hr
+                        </div>
+                        <div class="gauge-value" id="rain-daily">-</div>
+                        <div
+                            id="rain-label"
+                            style="font-size: 0.9rem; color: #aaa"
+                        >
+                            Daily Rain
+                        </div>
+                    </div>
+
+                    <div class="rain-stats" style="width: 150px">
+                        <div class="rain-stat">
+                            <span>Event:</span
+                            ><span id="rain-event-val">-</span>
+                        </div>
+                        <div class="rain-stat">
+                            <span>Hour:</span
+                            ><span id="rain-hourly-val">-</span>
+                        </div>
+                        <div class="rain-stat">
+                            <span>Week:</span
+                            ><span id="rain-weekly-val">-</span>
+                        </div>
+                        <div class="rain-stat">
+                            <span>Month:</span
+                            ><span id="rain-monthly-val">-</span>
+                        </div>
+                        <div class="rain-stat">
+                            <span>Year:</span
+                            ><span id="rain-yearly-val">-</span>
+                        </div>
+
+                        <br />
+                        <div
+                            class="history-link"
+                            data-target="rain_history.html"
+                        >
+                            History →
+                        </div>
+                    </div>
+                </div>
+
+    
+            </div>
+
+            <!-- Sun Gauge -->
+            <div class="gauge-group">
+                <div
+                    class="gauge-title"
+                    style="text-align: center; margin-bottom: 0.5rem"
+                >
+                    Sun
+                </div>
+
+                <div class="sun-row sun-header">
+                    <span></span><span>Rise</span><span>Set</span>
+                </div>
+
+                <div class="sun-row">
+                    <span>Actual</span><span id="sun-rise-actual">-</span
+                    ><span id="sun-set-actual">-</span>
+                </div>
+                <div class="sun-row">
+                    <span>Civil</span><span id="sun-rise-civil">-</span
+                    ><span id="sun-set-civil">-</span>
+                </div>
+
+                <hr class="astro-line" />
+
+                <div class="sun-stats">
+                    <div class="astro-stat">
+                        <span>Visible Light:</span
+                        ><span id="astro-visible">-</span>
+                    </div>
+                    <div class="astro-stat">
+                        <span>Length of Day:</span
+                        ><span id="astro-day-length">-</span>
+                    </div>
+
+                    <hr class="astro-line" />
+
+                    <div class="astro-stat">
+                        <span>UVI:</span><span id="sun-uvi-val">-</span>
+                    </div>
+                    <div class="astro-stat">
+                        <span>Sky:</span><span id="sun-sky-val">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Moon Gauge -->
+            <div class="gauge-group moon-box">
+                <div
+                    class="gauge-title"
+                    style="text-align: center; margin-bottom: 0.5rem"
+                >
+                    Moon
+                </div>
+
+                <div
+                    id="moon-phase-graphic"
+                    style="
+                        height: 100px;
+                        width: 100px;
+                        margin: 0 auto;
+                        position: relative;
+                    "
+                ></div>
+
+                <div
+                    class="gauge-value"
+                    id="moon-phase-name"
+                    style="font-size: 1rem; margin-top: 0.5rem"
+                >
+                    -
+                </div>
+                <div class="gauge-range" id="moon-illumination">-</div>
+                <div class="gauge-range" id="moon-waxing">-</div>
+            </div>
+        </div>
+
+        <div class="system-line">
+            <div id="ws90-status-container">
+                <span
+                    id="ws90-status-indicator"
+                    class="status-badge status-unknown"
+                >
+                    WS90 status: unknown
+                </span>
+                <span id="ws90-status-detail"></span>
+                <span id="ws90-last-update"></span>
+            </div>
+
+            <span id="sys-model"></span> • <span id="sys-id"></span> •
+            <span id="sys-fw"></span> •
+            <span id="sys-power"></span>
+        </div>
+
+        <script>
+            async function fetchSoil() {
+                try {
+                    const r = await fetch("/garden/values/?PLOT1", {
+                        cache: "no-store",
+                    });
+                    if (!r.ok) throw new Error("HTTP " + r.status);
+
+                    const j = await r.json();
+                    const d = j?.values?.PLOT1?.display;
+                    const el = document.getElementById("soil-temp");
+
+                    if (typeof d === "number" && Number.isFinite(d)) {
+                        el.textContent = "Soil Temp: " + d;
+                    } else if (typeof d === "string" && d.trim() !== "") {
+                        el.textContent = "Soil Temp: " + d.trim();
+                    } else {
+                        el.textContent = "Soil Temp Not Available";
+                    }
+                } catch (e) {
+                    document.getElementById("soil-temp").textContent =
+                        "Soil Temp Error";
+                }
+            }
+
+    
+            function formatUptime(sec) {
+                const days = Math.floor(sec / 86400);
+                sec %= 86400;
+
+                const hours = Math.floor(sec / 3600);
+                sec %= 3600;
+
+                const minutes = Math.floor(sec / 60);
+
+                let out = "";
+                if (days > 0) out += days + "d ";
+                if (hours > 0 || days > 0) out += hours + "h ";
+                out += minutes + "m";
+                return out.trim();
+            }
+
+            function formatLastGoodTimestamp(lastUpdateTs) {
+                if (
+                    typeof lastUpdateTs !== "number" ||
+                    !Number.isFinite(lastUpdateTs) ||
+                    lastUpdateTs <= 0
+                ) {
+                    return "Last good data: never";
+                }
+
+                let tsMs =
+                    lastUpdateTs < 1e11 ? lastUpdateTs * 1000 : lastUpdateTs;
+
+                const d = new Date(tsMs);
+                if (Number.isNaN(d.getTime())) {
+                    return "Last good data: never";
+                }
+
+                return "Last good data: " + d.toLocaleString();
+            }
+
+            function updateWs90Status(ws) {
+                const container = document.getElementById(
+                    "ws90-status-container",
+                );
+                const badge = document.getElementById("ws90-status-indicator");
+                const detail = document.getElementById("ws90-status-detail");
+                const lastUpd = document.getElementById("ws90-last-update");
+
+                if (!container || !badge || !detail || !lastUpd) return;
+
+                if (!ws) {
+                    container.style.display = "";
+                    badge.textContent = "WS90 STATUS UNKNOWN";
+                    badge.className = "status-badge status-warn";
+                    detail.textContent = "No status from backend.";
+                    lastUpd.textContent = "Last good data: unknown";
+                    return;
+                }
+
+                const httpOk = !!ws.http_ok;
+                const rtlsdrOk = !!ws.rtlsdr_ok;
+                const stale = !!ws.stale;
+                const errCode = ws.error || "";
+                const errMessage = ws.error_message || "";
+                const lastUpdate =
+                    typeof ws.last_update_ts === "number"
+                        ? ws.last_update_ts
+                        : 0;
+
+                const everythingOk = httpOk && rtlsdrOk && !stale;
+
+                if (everythingOk) {
+                    container.style.display = "none";
+                    return;
+                }
+
+                container.style.display = "";
+
+                let badgeText = "WS90 ISSUE";
+                let badgeClass = "status-warn";
+                let detailText = "";
+
+                if (!httpOk) {
+                    badgeText = "WS90 OFFLINE";
+                    badgeClass = "status-error";
+                    detailText = errMessage || "Backend cannot reach WS90.";
+                } else if (httpOk && !rtlsdrOk) {
+                    badgeText = "WS90 STALE";
+                    badgeClass = "status-warn";
+
+                    if (errCode === "stale_data") {
+                        detailText = "Data feed from RTLSDR appears stalled.";
+                    } else if (errCode === "no_data") {
+                        detailText = "WS90 has not received any data yet.";
+                    } else if (errCode) {
+                        detailText =
+                            "WS90 error: " +
+                            errCode +
+                            (errMessage ? " (" + errMessage + ")" : "");
+                    } else {
+                        detailText = "WS90 HTTP OK but no fresh data.";
+                    }
+                } else if (stale) {
+                    badgeText = "WS90 DATA STALE";
+                    badgeClass = "status-warn";
+                    detailText =
+                        "Last update is older than the stale threshold.";
+                }
+
+                badge.textContent = badgeText;
+                badge.className = "status-badge " + badgeClass;
+                detail.textContent = detailText;
+                lastUpd.textContent = formatLastGoodTimestamp(lastUpdate);
+            }
+
+ 
+	       const ENDPOINT_URL = "/api/v2/weather";
+            const POLL_MS = 10000;
+            let lastGoodUpdate = 0;
+
+            function clamp(x, min, max) {
+                if (!Number.isFinite(x)) return min;
+                return Math.max(min, Math.min(max, x));
+            }
+
+            function formatTimestamp(t) {
+                if (!t || isNaN(t.getTime())) return "-";
+                return t.toLocaleString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                });
+            }
+
+            function drawWindBarb(container, speedMph, dirDeg) {
+                const speedKt = speedMph * 0.868976;
+                let feathers = [];
+                let rem = speedKt;
+
+                while (rem >= 50) {
+                    feathers.push("flag");
+                    rem -= 50;
+                }
+                while (rem >= 10) {
+                    feathers.push("full");
+                    rem -= 10;
+                }
+                if (rem >= 5) {
+                    feathers.push("half");
+                }
+
+                let svg = [];
+                svg.push(
+                    `<svg width="60" height="60" viewBox="0 0 60 60" style="transform: rotate(${dirDeg}deg);">`,
+                );
+                svg.push(
+                    `<line x1="30" y1="10" x2="30" y2="45" stroke="white" stroke-width="2"/>`,
+                );
+                svg.push(`<polygon points="27,10 33,10 30,4" fill="white"/>`);
+
+                let y = 20;
+                for (const f of feathers) {
+                    if (f === "flag") {
+                        svg.push(
+                            `<polygon points="30,${y} 45,${y - 5} 45,${y + 5}" fill="white"/>`,
+                        );
+                    } else if (f === "full") {
+                        svg.push(
+                            `<line x1="30" y1="${y}" x2="45" y2="${y}" stroke="white" stroke-width="2"/>`,
+                        );
+                    } else if (f === "half") {
+                        svg.push(
+                            `<line x1="30" y1="${y}" x2="40" y2="${y}" stroke="white" stroke-width="2"/>`,
+                        );
+                    }
+                    y += 6;
+                }
+
+                svg.push(`</svg>`);
+                container.innerHTML = svg.join("");
+            }
+
+            var drawPlanetPhase = (function () {
+                "use strict";
+
+                function calcInner(outerDiameter, semiPhase) {
+                    var innerRadius,
+                        absPhase = Math.abs(semiPhase),
+                        n = ((1 - absPhase) * outerDiameter) / 2 || 0.01;
+
+                    innerRadius =
+                        n / 2 + (outerDiameter * outerDiameter) / (8 * n);
+
+                    return {
+                        d: innerRadius * 2,
+                        o:
+                            semiPhase > 0
+                                ? outerDiameter / 2 - n
+                                : -2 * innerRadius + outerDiameter / 2 + n,
+                    };
+                }
+
+                function setCss(el, props) {
+                    for (let p in props) {
+                        el.style[p] = props[p];
+                    }
+                }
+
+                function drawDiscs(outer, inner, blurSize) {
+                    setCss(outer.box, {
+                        position: "absolute",
+                        height: outer.diameter + "px",
+                        width: outer.diameter + "px",
+                        backgroundColor: outer.colour,
+                        borderRadius: outer.diameter / 2 + "px",
+                        overflow: "hidden",
+                    });
+
+                    var blurredDiameter = inner.diameter - blurSize;
+                    var blurredOffset = inner.offset + blurSize / 2;
+
+                    setCss(inner.box, {
+                        position: "absolute",
+                        backgroundColor: inner.colour,
+                        borderRadius: blurredDiameter / 2 + "px",
+                        height: blurredDiameter + "px",
+                        width: blurredDiameter + "px",
+                        left: blurredOffset + "px",
+                        top: (outer.diameter - blurredDiameter) / 2 + "px",
+                        boxShadow:
+                            "0px 0px " +
+                            blurSize +
+                            "px " +
+                            blurSize +
+                            "px " +
+                            inner.colour,
+                        opacity: inner.opacity,
+                    });
+                }
+
+                function makeDiv(container) {
+                    var div = document.createElement("div");
+                    container.appendChild(div);
+                    return div;
+                }
+
+                function setPhase(outerBox, phase, isWaxing, config) {
+                    var innerBox = makeDiv(outerBox),
+                        outerColour,
+                        innerColour,
+                        innerVals;
+
+                    if (phase < 0.5) {
+                        outerColour = config.lightColour;
+                        innerColour = config.shadowColour;
+                        if (isWaxing) phase *= -1;
+                    } else {
+                        outerColour = config.shadowColour;
+                        innerColour = config.lightColour;
+                        phase = 1 - phase;
+                        if (!isWaxing) phase *= -1;
+                    }
+
+                    innerVals = calcInner(config.diameter, phase * 2);
+
+                    drawDiscs(
+                        {
+                            box: outerBox,
+                            diameter: config.diameter,
+                            colour: outerColour,
+                        },
+                        {
+                            box: innerBox,
+                            diameter: innerVals.d,
+                            colour: innerColour,
+                            offset: innerVals.o,
+                            opacity: 1 - config.earthshine,
+                        },
+                        config.blur,
+                    );
+                }
+
+                var defaultConfig = {
+                    shadowColour: "black",
+                    lightColour: "white",
+                    diameter: 100,
+                    earthshine: 0.1,
+                    blur: 3,
+                };
+
+                function populateMissingConfigValues(config) {
+                    for (let p in defaultConfig)
+                        config[p] =
+                            config[p] === undefined
+                                ? defaultConfig[p]
+                                : config[p];
+                    return config;
+                }
+
+                return function (containerEl, phase, isWaxing, config) {
+                    config = populateMissingConfigValues(
+                        Object.create(config || {}),
+                    );
+                    var el = makeDiv(containerEl);
+                    setPhase(el, phase, isWaxing, config);
+                };
+            })();
+
+            function dewPointF(tempF, rh) {
+                if (!Number.isFinite(tempF) || !Number.isFinite(rh))
+                    return null;
+                if (rh <= 0 || rh > 100) return null;
+
+                const T = ((tempF - 32) * 5) / 9;
+                const a = 17.27;
+                const b = 237.7;
+
+                const alpha = (a * T) / (b + T) + Math.log(rh / 100);
+                const dewC = (b * alpha) / (a - alpha);
+
+                return (dewC * 9) / 5 + 32;
+            }
+
+            function tempColor(tempF) {
+                if (tempF == null || isNaN(tempF)) return "#777";
+
+                if (tempF <= 0) return "#3a8acb";
+                if (tempF <= 32) return "#4db1e8";
+                if (tempF <= 60) return "#7aa6c9";
+                if (tempF <= 80) return "#e1c37a";
+                if (tempF <= 95) return "#f2a041";
+                if (tempF <= 105) return "#e87447";
+                return "#d94343";
+            }
+
+            function updateUI(d) {
+                const num = (v, def = null) =>
+                    typeof v === "number" ? v : def;
+
+                const ws = d.ws90_status || null;
+                updateWs90Status(ws);
+
+                if (
+                    ws &&
+                    typeof ws.last_update_ts === "number" &&
+                    ws.last_update_ts > 0
+                ) {
+                    lastGoodUpdate = ws.last_update_ts * 1000;
+                } else {
+                    lastGoodUpdate = Date.now();
+                }
+
+                document.getElementById("data-status").textContent = "";
+                document
+                    .getElementById("data-status")
+                    .classList.remove("no-data");
+
+                const powerEl = document.getElementById("sys-power");
+                powerEl.classList.remove("power-ok", "power-warn", "power-bad");
+
+                const t = d.time ? new Date(d.time) : null;
+                document.getElementById("last-time").textContent =
+                    formatTimestamp(t);
+
+                document.getElementById("sys-model").textContent = d.model
+                    ? `Model: ${d.model}`
+                    : "Model: -";
+
+                document.getElementById("sys-id").textContent =
+                    d.id != null ? `ID: ${d.id}` : "ID: -";
+
+                document.getElementById("sys-fw").textContent =
+                    d.firmware != null ? `FW: ${d.firmware}` : "FW: -";
+
+                const tempF = num(d.temperature_F);
+                if (tempF !== null) {
+                    const clamped = clamp(tempF, -40, 140);
+                    document.getElementById("temp-val").textContent =
+                        tempF.toFixed(1) + " °F";
+
+                    const pct = ((clamped + 40) / 180) * 100;
+                    const tempBar = document.getElementById("temp-bar");
+                    tempBar.style.height = pct.toFixed(1) + "%";
+                    tempBar.style.background = tempColor(tempF);
+                } else {
+                    document.getElementById("temp-val").textContent = "-";
+                    document.getElementById("temp-bar").style.height = "0%";
+                }
+
+                if (
+                    d.daily?.temp_low_F != null &&
+                    d.daily?.temp_high_F != null
+                ) {
+                    document.getElementById("temp-range").textContent =
+                        `${Number(d.daily.temp_low_F).toFixed(1)}°F - ${Number(d.daily.temp_high_F).toFixed(1)}°F`;
+                }
+
+                const hum = num(d.humidity);
+                if (hum !== null) {
+                    const h = clamp(hum, 0, 100);
+                    document.getElementById("hum-val").textContent =
+                        h.toFixed(0) + " % RH";
+                    document.getElementById("hum-bar").style.height =
+                        h.toFixed(0) + "%";
+                } else {
+                    document.getElementById("hum-val").textContent = "-";
+                    document.getElementById("hum-bar").style.height = "0%";
+                }
+
+                if (
+                    d.daily?.humidity_low != null &&
+                    d.daily?.humidity_high != null
+                ) {
+                    document.getElementById("hum-range").textContent =
+                        `${Math.round(d.daily.humidity_low)}% – ${Math.round(d.daily.humidity_high)}%`;
+                }
+
+                const tempDewEl = document.getElementById("temp-dew");
+
+                if (typeof tempF === "number" && typeof hum === "number") {
+                    const dp = dewPointF(tempF, hum);
+                    if (typeof dp === "number") {
+                        tempDewEl.textContent = `Dew point: ${dp.toFixed(1)} °F`;
+                    } else {
+                        tempDewEl.textContent = "Dew point: –";
+                    }
+
+                    if (Math.abs(tempF - dp) < 2) {
+                        tempDewEl.style.color = "#30cfc7";
+                    } else {
+                        tempDewEl.style.color = "#aaa";
+                    }
+                } else {
+                    tempDewEl.textContent = "Dew point: –";
+                }
+
+                const avgMS = num(d.wind_avg_m_s, 0);
+                const maxMS = num(d.wind_max_m_s, 0);
+                const dir = num(d.wind_dir_deg, 0);
+
+                const avgMph = avgMS * 2.2369;
+                const maxMph = maxMS * 2.2369;
+                const top = Math.max(avgMph, maxMph);
+
+                const denom = Math.max(40, top * 1.25);
+                document.getElementById("wind-bar").style.height =
+                    clamp((top / denom) * 100, 0, 100).toFixed(1) + "%";
+
+                document.getElementById("wind-val").textContent =
+                    top < 1 ? "Calm" : top.toFixed(1) + " mph";
+
+                document.getElementById("wind-detail").textContent =
+                    `${maxMph.toFixed(1)} gust · ${dir.toFixed(0)}°`;
+
+                drawWindBarb(document.getElementById("wind-barb"), top, dir);
+
+                const dailyMean = num(d?.daily?.wind_mean_mph);
+                const dailyGust = num(d?.daily?.wind_gust_max_mph);
+                document.getElementById("wind-daily").textContent =
+                    dailyMean !== null && dailyGust !== null
+                        ? `Today: ${dailyMean.toFixed(1)} avg · ${dailyGust.toFixed(1)} max`
+                        : "no data yet";
+
+                const rainObj = d.rain || {};
+
+                function getRainVal(objVal, flatVal, defaultVal = 0) {
+                    if (typeof objVal === "number" && Number.isFinite(objVal)) {
+                        return objVal;
+                    }
+                    if (
+                        typeof flatVal === "number" &&
+                        Number.isFinite(flatVal)
+                    ) {
+                        return flatVal;
+                    }
+                    return defaultVal;
+                }
+
+                const rainDaily = getRainVal(
+                    rainObj.daily_in,
+                    d.rain_daily_in,
+                    0,
+                );
+                document.getElementById("rain-daily").textContent =
+                    rainDaily.toFixed(2) + " in";
+
+                const rainHourly = getRainVal(
+                    rainObj.hourly_in,
+                    d.rain_hourly_in,
+                    0,
+                );
+                const rainEvent = getRainVal(
+                    rainObj.event_in,
+                    d.rain_event_in,
+                    0,
+                );
+                const rainWeekly = getRainVal(
+                    rainObj.weekly_in,
+                    d.rain_weekly_in,
+                    0,
+                );
+                const rainMonthly = getRainVal(
+                    rainObj.monthly_in,
+                    d.rain_monthly_in,
+                    0,
+                );
+                const rainYearly = getRainVal(
+                    rainObj.yearly_in,
+                    d.rain_yearly_in,
+                    0,
+                );
+
+                document.getElementById("rain-hourly-val").textContent =
+                    rainHourly.toFixed(2) + " in";
+                document.getElementById("rain-event-val").textContent =
+                    rainEvent.toFixed(2) + " in";
+                document.getElementById("rain-weekly-val").textContent =
+                    rainWeekly.toFixed(2) + " in";
+                document.getElementById("rain-monthly-val").textContent =
+                    rainMonthly.toFixed(2) + " in";
+                document.getElementById("rain-yearly-val").textContent =
+                    rainYearly.toFixed(2) + " in";
+
+                const rainRateEl = document.getElementById("rain-rate-val");
+                if (rainRateEl) {
+                    rainRateEl.textContent = "-";
+                }
+
+                const isRainingNow = rainHourly > 0.03;
+                const iconOff = document.getElementById("icon-rain-off");
+                const iconOn = document.getElementById("icon-rain-on");
+                const label = document.getElementById("rain-label");
+
+                if (isRainingNow) {
+                    iconOff && (iconOff.style.display = "none");
+                    iconOn && (iconOn.style.display = "block");
+                    label.textContent = "Raining";
+                } else {
+                    iconOff && (iconOff.style.display = "block");
+                    iconOn && (iconOn.style.display = "none");
+                    label.textContent = "Daily Rain";
+                }
+
+                const fmt = (ts) =>
+                    ts
+                        ? new Date(ts * 1000).toLocaleTimeString("en-US", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                          })
+                        : "-";
+
+                if (d.astro?.sun) {
+                    const s = d.astro.sun;
+                    document.getElementById("sun-rise-actual").textContent =
+                        fmt(s.sunrise_ts);
+                    document.getElementById("sun-set-actual").textContent = fmt(
+                        s.sunset_ts,
+                    );
+                    document.getElementById("sun-rise-civil").textContent = fmt(
+                        s.civil_sunrise_ts,
+                    );
+                    document.getElementById("sun-set-civil").textContent = fmt(
+                        s.civil_sunset_ts,
+                    );
+
+                    if (s.length_of_visible_sec) {
+                        const v = s.length_of_visible_sec;
+                        document.getElementById("astro-visible").textContent =
+                            `${Math.floor(v / 3600)}h ${((v % 3600) / 60) | 0}m`;
+                    }
+                    if (s.length_of_day_sec) {
+                        const L = s.length_of_day_sec;
+                        document.getElementById(
+                            "astro-day-length",
+                        ).textContent =
+                            `${Math.floor(L / 3600)}h ${((L % 3600) / 60) | 0}m`;
+                    }
+                }
+
+                if (d.astro?.moon) {
+                    const m = d.astro.moon;
+
+                    const illum = Number(m.visible);
+                    const illumPct = Math.round(illum * 100);
+
+                    const waxing = !String(m.segment || "")
+                        .toLowerCase()
+                        .includes("waning");
+
+                    let phaseText = "-";
+
+                    if (illum < 0.03) phaseText = "New Moon";
+                    else if (illum < 0.25)
+                        phaseText = waxing
+                            ? "Waxing Crescent"
+                            : "Waning Crescent";
+                    else if (illum < 0.27)
+                        phaseText = waxing ? "First Quarter" : "Last Quarter";
+                    else if (illum < 0.5)
+                        phaseText = waxing
+                            ? "Waxing Crescent"
+                            : "Waning Crescent";
+                    else if (illum < 0.73)
+                        phaseText = waxing
+                            ? "Waxing Gibbous"
+                            : "Waning Gibbous";
+                    else if (illum < 0.97)
+                        phaseText = waxing
+                            ? "Waxing Gibbous"
+                            : "Waning Gibbous";
+                    else phaseText = "Full Moon";
+
+                    document.getElementById("moon-phase-name").textContent =
+                        phaseText;
+                    document.getElementById("moon-illumination").textContent =
+                        `${illumPct}% illuminated`;
+                    document.getElementById("moon-waxing").textContent = waxing
+                        ? "Waxing"
+                        : "Waning";
+
+                    const container =
+                        document.getElementById("moon-phase-graphic");
+                    container.innerHTML = "";
+                    drawPlanetPhase(container, illum, waxing, {
+                        diameter: 80,
+                        earthshine: 0.15,
+                        blur: 2,
+                    });
+                }
+
+                const uviEl = document.getElementById("sun-uvi-val");
+                const uviVal = num(d.uvi);
+
+                if (
+                    typeof uviVal === "number" &&
+                    Number.isFinite(uviVal) &&
+                    uviVal > 0
+                ) {
+                    uviEl.textContent = uviVal.toFixed(1);
+                } else {
+                    uviEl.textContent = "-";
+                }
+
+                const lux = num(d.light_lux, 0);
+                let sky = "Night";
+                if (lux > 20000) sky = "Sun";
+                else if (lux > 5000) sky = "Bright";
+                else if (lux > 1000) sky = "Cloudy";
+                else if (lux > 50) sky = "Dawn";
+                document.getElementById("sun-sky-val").textContent = sky;
+
+                const mv = num(d.battery_mV);
+                if (mv !== null) {
+                    const v = (mv / 1000).toFixed(2);
+                    powerEl.textContent = `Power: ${v} V`;
+                    powerEl.classList.toggle("power-ok", mv >= 3000);
+                    powerEl.classList.toggle("power-warn", mv >= 2800);
+                    powerEl.classList.toggle("power-bad", mv < 2800);
+                } else {
+                    powerEl.textContent = "Power: -";
+                }
+            }
+
+            // ---------- History link navigation ----------
+            document
+                .querySelectorAll(".history-link[data-target]")
+                .forEach((el) => {
+                    const target = el.getAttribute("data-target");
+                    if (!target) return;
+                    el.addEventListener("click", () => {
+                        window.location.href = target;
+                    });
+                });
+
+            async function fetchData() {
+                try {
+                    const r = await fetch(ENDPOINT_URL, { cache: "no-store" });
+                    if (!r.ok) throw new Error("HTTP " + r.status);
+                    const json = await r.json();
+                    updateUI(json);
+                } catch (e) {
+                    const s = document.getElementById("data-status");
+                    s.textContent = "No data";
+                    s.classList.add("no-data");
+                }
+            }
+
+            fetchData();
+            setInterval(fetchData, POLL_MS);
+
+            setInterval(() => {
+                if (Date.now() - lastGoodUpdate > 180000) {
+                    const p = document.getElementById("sys-power");
+                    p.textContent = "No data";
+                    p.classList.add("no-data");
+                }
+            }, 10000);
+
+            fetchSoil();
+            setInterval(fetchSoil, 900000);
+
+            setInterval(fetchGardenStatus, 60000);
+        </script>
+    </body>
+</html>

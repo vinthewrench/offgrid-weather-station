@@ -1,0 +1,5 @@
+{
+  "WINDY_API_KEY": "YOUR API KEY",
+  "BACKEND_URL": "http://localhost:8889/api/v2/weather",
+  "WINDY_INTERVAL_SEC": 300
+}

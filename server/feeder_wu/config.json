@@ -1,0 +1,6 @@
+{
+    "WU_STATION_ID": "YOUR STATION ID",
+    "WU_STATION_KEY": "YOUR KEY",
+    "BACKEND_URL": "http://localhost:8889/api/v2/weather",
+    "WU_INTERVAL_SEC": 60
+}

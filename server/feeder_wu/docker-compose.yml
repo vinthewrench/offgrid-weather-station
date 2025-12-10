@@ -1,0 +1,15 @@
+services:
+    feeder_wu:
+        build:
+            context: .
+            dockerfile: Dockerfile
+
+        container_name: feeder_wu
+        restart: unless-stopped
+
+        # Mount config.json into /app inside the container
+        volumes:
+            - ./config.json:/app/config.json:ro
+
+        # Allows the feeder to contact the backend at http://localhost:8889
+        network_mode: "host"
