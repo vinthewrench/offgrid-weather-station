@@ -7,6 +7,8 @@ No vendor cloud. No subscriptions. No “create an account to see your own sky.�
 If you want a $59 plastic weather toy from a big box store, this is not that.  
 If you want something you can understand, fix, and own, read on.
 
+Read the article at  https://www.vinthewrench.com/
+
 ---
 
 ## Table of Contents
@@ -38,6 +40,7 @@ If you want something you can understand, fix, and own, read on.
 - [Resetting State Safely](#resetting-state-safely)
 - [Troubleshooting and RF Tools](#troubleshooting-and-rf-tools)
 - [Security Notes](#security-notes)
+- [USB Notes](#usb-notes)
 - [Cloudflare Tunnel (Optional, Recommended for Remote Access)](#cloudflare-tunnel-optional-recommended-for-remote-access)
 - [Optional External Weather Service Feeders](#optional-external-weather-service-feeders)
   - [Weather Underground Feeder](#weather-underground-feeder)
@@ -697,6 +700,10 @@ curl http://localhost:7890/
 
 You should see WS90 packets in JSON. If not, see the troubleshooting section.
 
+> ⚠️ **Important:** Also see the [USB Notes](#usb-notes) later in this document.  
+> USB autosuspend *must* be disabled for reliable SDR operation.
+
+
 ### Building and Running ecowitt
 
 Place the `ecowitt/` directory alongside `ws90/`.
@@ -1081,7 +1088,54 @@ Run it the same way:
 
 If the internet goes down, your weather station should shrug, keep logging, keep computing, and keep serving the dashboard.
  
+ ---
+
+## USB Notes
+
+My system uses a Nooelec RTL-SDR to receive WS90 weather station data via `rtl_433`, running inside a Docker container. Under long-term operation, the WS90 data stream was observed to **silently stall** while all processes appeared healthy.
+After some debugging I discovered that the WS90 RTL-SDR was being **disconnected at the USB level** by the Linux kernel due to **USB autosuspend**.
+
+This was confirmed by host kernel logs showing repeated disconnect and re-enumeration events:
+
+```sh
+sudo dmesg -wT | egrep -i "usb|disconnect|reset|rtl|Nooelec"
+ 
+usb 1-1.4: USB disconnect
+usb 1-1.4: new high-speed USB device
+```
+
+System power was verified as stable (`vcgencmd get_throttled = 0x0`).  
+This was **not** a power supply failure. It was a kernel power-management decision.
+
+USB autosuspend is a Linux kernel power-management feature designed to reduce power consumption by **temporarily powering down idle USB devices**.
+ 
+This feature was intended for keyboards, mice and other consumer peripherals with bursty, user-driven activity, but it breaks our SDR device.  
+
+From the kernel’s perspective, an SDR may appear “idle” between bursts of decoded data.  
+From the SDR’s perspective, **any power interruption is a failure**.
+
+### Fix (Immediate)
+
+Disable USB autosuspend at runtime and force the WS90 device to stay powered:
+
+```sh
+echo -1 | sudo tee /sys/module/usbcore/parameters/autosuspend
+echo on | sudo tee /sys/bus/usb/devices/1-1.4/power/control
+```
+
+After applying this, the WS90 data stream resumed and no further USB disconnects were observed.
+
+### Fix (Permanent)
+
+Make the autosuspend disable persistent across reboots by editing the kernel command line
+at /boot/firmware/cmdline.txt and appending:
+
+```
+usbcore.autosuspend=-1
+```
+
 ---
+
 
 ## Optional External Weather Service Feeders
 
