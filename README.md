@@ -7,7 +7,7 @@ No vendor cloud. No subscriptions. No â€œcreate an account to see your own sky.â
 If you want a $59 plastic weather toy from a big box store, this is not that.  
 If you want something you can understand, fix, and own, read on.
 
-Read the article at  https://www.vinthewrench.com/
+Read the article at  https://www.vinthewrench.com/p/build-your-own-off-grid-weather-station
 
 ---
 
