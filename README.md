@@ -1134,6 +1134,76 @@ at /boot/firmware/cmdline.txt and appending:
 usbcore.autosuspend=-1
 ```
 
+### Disconnected USB from the SDR
+
+I occasionally have seen the pi disconnect USB from the SDR.
+
+You can detect the problem by reading the kernel log:
+
+```bash
+sudo dmesg -wT | egrep -i "usb|disconnect|reset|2838|Nooelec"
+```
+
+Typical output:
+
+```text
+usb 1-1.4: USB disconnect, device number 12
+usb 1-1.4: new high-speed USB device number 13 using xhci_hcd
+usb 1-1.4: Product: SMArt XTR v5
+```
+
+Key indicators:
+- Clean USB disconnect followed by immediate reconnect
+- No kernel error messages
+- Device number increases each time
+- Happens repeatedly over hours or days
+
+
+--
+best I can tell :
+
+- RTL-SDR dongles draw current in short bursts
+- rtl_433 defaults to wide bandwidth and AGC
+- Gain changes and packet bursts cause sharp current spikes
+- The Pi 4 USB power switch detects the spike and momentarily cuts VBUS
+- The SDR resets and re-enumerates cleanly
+
+I updated the rtl_433 settings  in weather/ws90/entrypoint.sh.  to:
+
+```bash
+rtl_433 \
+  -f 433920000 \
+  -s 1024k \
+  -g 20 \
+  -R 161 \
+  -M time:iso
+```
+
+1. `-s 1024k` (sample rate)
+   - Sets the SDR IQ sample rate to **1.024 MSPS** (1,024,000 samples/sec).
+   - rtl_433 often defaults to **2.4 MSPS** if you do not specify `-s`.
+   - Effect:
+     - Lower ADC and USB throughput load
+     - Lower average and peak current draw inside the dongle
+     - Less heat
+     - Fewer USB power transients
+
+2. `-g 20` (manual gain, disables AGC)
+   - Sets a **fixed tuner gain** value (here, 20 dB in rtl_433/rtl-sdr units).
+   - Using `-g` disables the automatic gain control behavior that otherwise jumps gain up/down.
+   - Effect:
+     - Eliminates gain “step” transients triggered by bursty packets
+     - Makes current draw more stable and predictable
+   - Notes:
+     - You may need to tune this (typical working range is ~15 to 30) depending on antenna and sensor distance.
+
+3. `-R 161` (restrict decoders)
+   - Enables **only** decoder number **161** (Ecowitt/WS90-class protocol) instead of running the full “try everything” decoder set.
+   - Effect:
+     - Reduces CPU/DSP work per received burst
+     - Reduces short-lived processing spikes during packet bursts
+
+
 ---
 
 
