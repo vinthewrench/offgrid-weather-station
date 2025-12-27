@@ -38,6 +38,7 @@ Read the article at  https://www.vinthewrench.com/p/build-your-own-off-grid-weat
   - [Location and Time](#location-and-time)
 - [JSON API](#json-api)
 - [Resetting State Safely](#resetting-state-safely)
+- [Docker Compose restart policies sometimes not applied after reboot](#docker-compose-restart-policies-sometimes-not-applied-after-reboot)
 - [Troubleshooting and RF Tools](#troubleshooting-and-rf-tools)
 - [Security Notes](#security-notes)
 - [USB Notes](#usb-notes)
@@ -933,6 +934,131 @@ docker logs ecowitt-nginx
 ```
 
 If `/api/` returns 502 or 504, nginx cannot talk to the backend. Usually that means the backend container is dead or restarting.
+
+---
+## Docker Compose restart policies sometimes not applied after reboot
+
+### PROBLEM DESCRIPTION
+
+On Raspberry Pi systems running Debian Trixie with Docker and docker-compose,
+containers configured with:
+
+`restart: unless-stopped`
+may fail to start reliably after a reboot.
+
+### Symptoms observed:
+
+After boot, some or all containers are not running
+No obvious errors from docker-compose
+Containers appear stopped or missing
+Running `docker ps -a` causes containers to suddenly appear or start
+Behavior is intermittent and timing-dependent
+This occurs even though:
+
+docker.service and containerd.service are installed
+Restart policies are correctly configured
+Containers were running correctly before reboot
+
+### ROOT CAUSE
+
+This issue is caused by a startup race involving:
+
+systemd parallel service startup
+Docker socket activation defaults
+containerd readiness timing
+cgroup v2 initialization latency
+Slower ARM boot and IO characteristics
+On Debian-based systems, docker.service is packaged to support socket
+activation by default. The stock unit includes:
+
+Requires=docker.socket
+ExecStart using -H fd://
+This leads to the following failure mode:
+
+systemd starts containerd and docker in parallel
+docker.socket is activated (even if disabled) because it is required
+dockerd attempts a one-time container restore
+containerd and cgroup v2 may not yet be fully ready
+Some container restores fail silently
+Docker does NOT retry restore later
+As a result:
+
+Containers may exist in containerd but are not restored by Docker
+Restart policies are never re-applied
+Docker appears idle until a client command forces reconciliation
+Running docker ps -a forces a metadata scan and reconciliation, which
+is why it appears to "fix" the problem.
+
+### SOLUTION
+
+The reliable solution is to:
+
+Completely disable Docker socket activation
+Run Docker as a normal systemd service (no fd:// socket)
+Control startup ordering explicitly
+Force a post-start reconciliation pass
+This removes the restore race entirely.
+
+### IMPLEMENTATION (ACTUAL WORKING CONFIGURATION)
+
+Mask the Docker socket:
+
+```
+sudo systemctl mask docker.socket
+sudo systemctl stop docker.socket
+```
+Masking ensures the socket cannot be started by any dependency.
+
+Create a systemd drop-in override for docker.service:
+
+`sudo systemctl edit docker`
+
+Use the following content EXACTLY as shown:
+```
+[Unit]
+After=containerd.service network-online.target
+Wants=network-online.target
+Requires=
+
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd --containerd=/run/containerd/containerd.sock
+ExecStartPost=/bin/sleep 5
+ExecStartPost=/bin/sh -c '/usr/bin/docker ps -a >/dev/null 2>&1 || true'
+```
+
+### Important notes:
+
+`Requires= clears the built-in Requires=docker.socket`
+`ExecStart=` clears the original socket-based ExecStart (-H fd://)
+Docker is run in classic service mode
+ExecStartPost is wrapped in /bin/sh so failures do not kill the service
+Apply changes:
+
+```
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+### VERIFICATION
+
+Check service state:
+
+```
+systemctl status docker
+systemctl status docker.socket
+```
+Expected:
+
+docker.service: active (running)
+docker.socket: masked, inactive (dead)
+Reboot test:
+
+`sudo reboot now`
+After login, wait ~30 seconds, then:
+
+`docker ps`
+All containers should already be running without manual intervention.
 
 ---
 
