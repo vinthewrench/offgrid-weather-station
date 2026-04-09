@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Rainfall History</title>
+
+        <!-- Shared global stylesheet -->
+        <link rel="stylesheet" href="/weather-common.css" />
+    </head>
+
+    <body>
+        <div id="container">
+            <h1>Rainfall History</h1>
+
+            <!-- canvas now uses the shared history-canvas class -->
+            <canvas id="rainCanvas" class="history-canvas"></canvas>
+
+            <div id="status">Loading rainfall history...</div>
+        </div>
+
+        <script>
+            ENDPOINT_URL = "/api/v2/history/rain";
+
+            (async function () {
+                const statusEl = document.getElementById("status");
+                const canvas = document.getElementById("rainCanvas");
+                const ctx = canvas.getContext("2d");
+
+                let pointsGlobal = null;
+
+                function setStatus(msg, isError) {
+                    statusEl.innerHTML = msg.replace(/\n/g, "<br>");
+                    statusEl.className = isError ? "error" : "";
+                }
+
+                // Resize canvas internal pixel resolution to match displayed CSS size
+                function resizeCanvasToDisplaySize(canvas) {
+                    const rect = canvas.getBoundingClientRect();
+                    const width = Math.round(rect.width);
+                    const height = Math.round(rect.height);
+
+                    if (width <= 0 || height <= 0) {
+                        return false;
+                    }
+
+                    if (canvas.width !== width || canvas.height !== height) {
+                        canvas.width = width;
+                        canvas.height = height;
+                        return true;
+                    }
+                    return false;
+                }
+
+                async function fetchData() {
+                    try {
+                        const resp = await fetch(ENDPOINT_URL);
+                        if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+                        const data = await resp.json();
+
+                        // Safely store for CSV
+                        if (
+                            data &&
+                            Array.isArray(data.days) &&
+                            data.days.length > 0
+                        ) {
+                            window.rainHistoryData = data;
+                        } else {
+                            window.rainHistoryData = { days: [] };
+                        }
+
+                        // Validate structure
+                        if (!data.days || !Array.isArray(data.days)) {
+                            throw new Error("Unexpected JSON shape");
+                        }
+
+                        const points = data.days.map((d) => ({
+                            ts: d.day,
+                            date: new Date(d.day * 1000),
+                            rain: d.rain_in,
+                        }));
+
+                        if (!points.length) {
+                            setStatus("No rainfall data available.", true);
+                            return;
+                        }
+
+                        pointsGlobal = points;
+
+                        resizeCanvasToDisplaySize(canvas);
+                        drawChart(points);
+
+                        const first = points[0].date.toLocaleDateString();
+                        const last =
+                            points[points.length - 1].date.toLocaleDateString();
+                        const total = points.reduce((a, b) => a + b.rain, 0);
+
+                        setStatus(
+                            "Showing " +
+                                points.length +
+                                " rainfall days from " +
+                                first +
+                                " to " +
+                                last +
+                                ".\n" +
+                                "Total recorded rainfall: " +
+                                total.toFixed(2) +
+                                " in.",
+                            false,
+                        );
+                    } catch (err) {
+                        console.error(err);
+                        setStatus("Error: " + err.message, true);
+                    }
+                }
+
+                function drawChart(points) {
+                    const width = canvas.width;
+                    const height = canvas.height;
+
+                    if (width === 0 || height === 0) return;
+
+                    const margin = {
+                        left: 60,
+                        right: 40,
+                        top: 20,
+                        bottom: 50,
+                    };
+
+                    ctx.clearRect(0, 0, width, height);
+
+                    // Time range: start to *last full month*
+                    const firstTs = points[0].ts;
+
+                    const lastPointDate = points[points.length - 1].date;
+                    const lastFullMonthEndDate = new Date(
+                        lastPointDate.getFullYear(),
+                        lastPointDate.getMonth() + 1,
+                        0,
+                        23,
+                        59,
+                        59,
+                    );
+                    const lastFullMonthTs = Math.floor(
+                        lastFullMonthEndDate.getTime() / 1000,
+                    );
+
+                    const span = lastFullMonthTs - firstTs || 1;
+
+                    function xForTime(ts) {
+                        return (
+                            margin.left +
+                            ((ts - firstTs) / span) *
+                                (width - margin.left - margin.right)
+                        );
+                    }
+
+                    // Y scaling
+                    const rains = points.map((p) => p.rain);
+                    const maxR = Math.max(...rains, 0);
+                    const plotHeight = height - margin.top - margin.bottom;
+
+                    function yForRain(r) {
+                        if (maxR === 0) return height - margin.bottom;
+                        return height - margin.bottom - (r / maxR) * plotHeight;
+                    }
+
+                    ctx.save();
+
+                    // Axes
+                    ctx.strokeStyle = "#ccc";
+                    ctx.lineWidth = 1;
+
+                    ctx.beginPath();
+                    ctx.moveTo(margin.left, margin.top);
+                    ctx.lineTo(margin.left, height - margin.bottom);
+                    ctx.lineTo(width - margin.right, height - margin.bottom);
+                    ctx.stroke();
+
+                    // Horizontal grid + labels
+                    const yTicks = 5;
+                    ctx.font = "11px system-ui, sans-serif";
+                    ctx.textAlign = "right";
+                    ctx.textBaseline = "middle";
+
+                    for (let i = 0; i <= yTicks; i++) {
+                        const r = (maxR / yTicks) * i;
+                        const y = yForRain(r);
+
+                        ctx.strokeStyle = "#333";
+                        ctx.beginPath();
+                        ctx.moveTo(margin.left, y);
+                        ctx.lineTo(width - margin.right, y);
+                        ctx.stroke();
+
+                        ctx.fillStyle = "#ccc";
+                        ctx.fillText(r.toFixed(2) + " in", margin.left - 8, y);
+                    }
+
+                    // Bars
+                    ctx.fillStyle = "#5599ff";
+                    const barWidth = 3;
+
+                    for (let i = 0; i < points.length; i++) {
+                        const p = points[i];
+                        const x = xForTime(p.ts);
+                        const y = yForRain(p.rain);
+                        const barHeight = height - margin.bottom - y;
+                        ctx.fillRect(x - barWidth / 2, y, barWidth, barHeight);
+                    }
+
+                    // Monthly blocks
+                    function getMonthBlocks() {
+                        const blocks = [];
+                        let d = new Date(
+                            points[0].date.getFullYear(),
+                            points[0].date.getMonth(),
+                            1,
+                        );
+                        const lastFullMonthEnd = lastFullMonthTs;
+
+                        while (d.getTime() / 1000 <= lastFullMonthEnd) {
+                            const year = d.getFullYear();
+                            const month = d.getMonth();
+
+                            const startTs =
+                                new Date(year, month, 1).getTime() / 1000;
+                            const endTs =
+                                new Date(year, month + 1, 0).getTime() / 1000;
+
+                            const total = points
+                                .filter((p) => p.ts >= startTs && p.ts <= endTs)
+                                .reduce((a, b) => a + b.rain, 0);
+
+                            blocks.push({
+                                year,
+                                month,
+                                startTs,
+                                endTs,
+                                total,
+                            });
+
+                            d = new Date(year, month + 1, 1);
+                        }
+
+                        return blocks;
+                    }
+
+                    const monthBlocks = getMonthBlocks();
+
+                    // Vertical month separators
+                    ctx.strokeStyle = "#333";
+                    ctx.lineWidth = 1;
+
+                    for (let i = 1; i < monthBlocks.length; i++) {
+                        const x = xForTime(monthBlocks[i].startTs);
+                        ctx.beginPath();
+                        ctx.moveTo(x, margin.top);
+                        ctx.lineTo(x, height - margin.bottom);
+                        ctx.stroke();
+                    }
+
+                    // Labels
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "top";
+                    ctx.fillStyle = "#ccc";
+                    ctx.font = "11px system-ui, sans-serif";
+
+                    for (let i = 0; i < monthBlocks.length; i++) {
+                        const blk = monthBlocks[i];
+                        const midTs = (blk.startTs + blk.endTs) / 2;
+                        const x = xForTime(midTs);
+                        const labelY = height - margin.bottom + 10;
+
+                        const label = new Date(
+                            blk.year,
+                            blk.month,
+                            1,
+                        ).toLocaleDateString(undefined, {
+                            month: "short",
+                            year: "numeric",
+                        });
+
+                        const daysInMonth = new Date(
+                            blk.year,
+                            blk.month + 1,
+                            0,
+                        ).getDate();
+                        const avg = blk.total / daysInMonth;
+
+                        ctx.fillText(label, x, labelY);
+                        ctx.fillText(
+                            blk.total.toFixed(2) + " / " + avg.toFixed(2),
+                            x,
+                            labelY + 15,
+                        );
+                    }
+
+                    ctx.restore();
+                }
+
+                window.addEventListener("resize", () => {
+                    if (!pointsGlobal) return;
+                    resizeCanvasToDisplaySize(canvas);
+                    drawChart(pointsGlobal);
+                });
+
+                await fetchData();
+            })();
+        </script>
+
+        <!-- CSV EXPORT FUNCTION -->
+        <script>
+            window.exportRainHistoryToCsv = function () {
+                const data = window.rainHistoryData;
+
+                if (
+                    !data ||
+                    !Array.isArray(data.days) ||
+                    data.days.length === 0
+                ) {
+                    alert("No rain history data available.");
+                    return;
+                }
+
+                const rows = ["date,rain_in"];
+
+                for (const item of data.days) {
+                    const dateStr = new Date(item.day * 1000)
+                        .toISOString()
+                        .slice(0, 10);
+                    rows.push(`${dateStr},${item.rain_in ?? ""}`);
+                }
+
+                const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "rain_history.csv";
+                a.click();
+
+                URL.revokeObjectURL(url);
+            };
+        </script>
+
+        <!-- BUTTON HOOKUP -->
+        <div style="margin-top: 20px">
+            <button id="downloadRainCsvBtn">Download CSV</button>
+        </div>
+
+        <script>
+            document
+                .getElementById("downloadRainCsvBtn")
+                .addEventListener("click", function () {
+                    if (typeof exportRainHistoryToCsv === "function") {
+                        exportRainHistoryToCsv();
+                    } else {
+                        alert("CSV export function not found.");
+                    }
+                });
+        </script>
+    </body>
+</html>

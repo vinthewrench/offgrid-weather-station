@@ -1,0 +1,15 @@
+[Unit]
+Description=WS90 rtl_433 feed
+Requires=ws90-api.service
+After=ws90-api.service
+
+[Service]
+Type=simple
+User=vinnie
+WorkingDirectory=/home/vinnie/ws90
+ExecStart=/home/vinnie/ws90/run_ws90_feed.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

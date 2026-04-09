@@ -1,0 +1,14 @@
+[Unit]
+Description=WS90 API bridge
+After=network.target
+
+[Service]
+Type=simple
+User=vinnie
+WorkingDirectory=/home/vinnie/ws90
+ExecStart=/home/vinnie/ws90/run_ws90_api.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

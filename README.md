@@ -678,19 +678,44 @@ Unplug and replug the dongle after that change.
 
 ### Building and Running ws90
 
+>  ⚠️ Notes on Docker (why it was dropped):
+> 
+> Note on Docker:
+> 
+> The Docker version was dropped. The containerized rtl_433 could see the SDR, but it would stop producing data or fail to decode packets, while the host version kept working.
+> 
+> There were also USB interface errors and restart loops that made it hard to tell when it had actually failed.
+> 
+> Rather than chase that down inside Docker, rtl_433 now runs directly on the host and feeds the API through a FIFO.
+> 
+> This setup is simpler and has been reliable.
+
+
 Place the `ws90/` directory on the Pi.
 
 From inside `ws90/`:
 
-```sh
-docker compose build
-docker compose up -d
-```
+**Make scripts executable**
 
-Check that the container is running:
+```chmod +x run_ws90_api.sh run_ws90_feed.sh install-systemd.sh```
+
+**Install as systemd services**
+
+```./install-systemd.sh```
+
+This installs and enables two services:
+
+ws90-feed.service (rtl_433 with built-in watchdog)
+ws90-api.service (HTTP API on port 7890)
+
+Check service status:
+```systemctl status ws90-api.service ws90-feed.service```
+
+View live logs:
 
 ```sh
-docker ps
+journalctl -u ws90-feed.service -f
+journalctl -u ws90-api.service -f
 ```
 
 Test the HTTP endpoint:
@@ -699,8 +724,7 @@ Test the HTTP endpoint:
 curl http://localhost:7890/
 ```
 
-You should see WS90 packets in JSON. If not, see the troubleshooting section.
-
+You should see current WS90 data in JSON format.
 > ⚠️ **Important:** Also see the [USB Notes](#usb-notes) later in this document.  
 > USB autosuspend *must* be disabled for reliable SDR operation.
 
