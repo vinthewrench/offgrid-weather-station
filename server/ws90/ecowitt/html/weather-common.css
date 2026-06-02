@@ -1,0 +1,316 @@
+/* -------------------------------------------------------
+   WEATHER-COMMON.CSS
+   Shared styling for:
+     - index.html dashboard
+     - temperature_history.html
+     - humidity_history.html
+     - rain_history.html
+     - future history pages
+   ------------------------------------------------------- */
+
+/* ----- Global Dark Theme ----- */
+:root {
+    color-scheme: dark;
+}
+
+body {
+    font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    background: #101015;
+    color: #eee;
+    margin: 0;
+    padding: 20px;
+}
+
+/* ----- Titles & Meta Info ----- */
+h1 {
+    font-size: 1.8rem;
+    text-align: center;
+    margin: 0 0 0.5rem 0;
+}
+
+.meta {
+    text-align: center;
+    color: #aaa;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+/* ----- Shared Container Layout ----- */
+#container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* -------------------------------------------------------
+   History Page Canvas Styling
+   (Used by temperature, humidity, rain history pages)
+   ------------------------------------------------------- */
+.history-canvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 2.25 / 1; /* Consistent visual proportions */
+    border: 1px solid #444;
+    background: #181818;
+    display: block;
+    margin-top: 10px;
+}
+
+/* Status bar under history charts */
+#status {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #aaa;
+    white-space: normal;
+    text-align: center;
+}
+
+#status.error {
+    color: #ff6666;
+}
+
+/* -------------------------------------------------------
+   Dashboard UI Elements (index.html)
+   ------------------------------------------------------- */
+
+/* ----- Status Badges (WS90/etc) ----- */
+.status-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    margin-right: 0.5rem;
+}
+
+.status-ok {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-warn {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status-error {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-unknown {
+    background-color: #e2e3e5;
+    color: #383d41;
+}
+
+/* ----- Gauge Grid Layout ----- */
+.gauges {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* Gauge “card” style */
+.gauge-group {
+    background: #181820;
+    border: 1px solid #2a2a34;
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+.gauge-group.clickable {
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease-out,
+        box-shadow 0.15s ease-out,
+        transform 0.15s ease-out;
+    transform-origin: center;
+}
+
+.gauge-group.clickable:hover {
+    border-color: #3a3a48;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.08);
+    transform: scale(1.03);
+}
+
+/* Gauge title/subtitle */
+.gauge-title {
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.4rem;
+}
+
+.gauge-subtitle {
+    font-size: 0.75rem;
+    color: #aaa;
+    margin-bottom: 0.5rem;
+}
+
+/* Gauge numeric values */
+.gauge-value {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-top: 0.4rem;
+}
+
+.gauge-range {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 0.25rem;
+}
+
+/* ----- Vertical Bars (Temp/Humidity/Wind/Rain) ----- */
+.v-bar {
+    position: relative;
+    height: 140px;
+    width: 40px;
+    margin: 0.25rem auto 0.3rem auto;
+    border-radius: 6px;
+    background: #2a2a34;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.7);
+}
+
+.v-bar-fill {
+    width: 100%;
+    transition: height 0.25s ease-out;
+}
+
+/* Fill colors */
+.temp-bar-fill {
+    background: #f39c12;
+}
+.hum-bar-fill {
+    background: #30cfc7;
+}
+.wind-bar-fill {
+    background: #9b59b6;
+}
+.rain-bar-fill {
+    background: #3498db;
+}
+
+.wind-vbar {
+    height: 76px;
+}
+
+/* ----- System Info Line ----- */
+.system-line {
+    text-align: center;
+    color: #aaa;
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.system-line span {
+    margin: 0 0.3rem;
+}
+
+/* ----- Rain stats block ----- */
+.rain-stats {
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.rain-stat {
+    display: grid;
+    grid-template-columns: 50px auto;
+    column-gap: 0.5rem;
+}
+
+/* ----- Sun stats block ----- */
+.sun-stats {
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+}
+
+/* ----- Astro / Moon blocks ----- */
+.astro-header {
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+    color: #ccc;
+}
+
+.astro-line {
+    border: none;
+    border-top: 1px solid #333;
+    margin: 0.4rem 0 0.6rem 0;
+}
+
+.moon-box {
+    padding: 0.4rem 0.4rem;
+}
+
+.moon-box .gauge-title {
+    margin-bottom: 0.3rem;
+}
+
+/* Moon graphic spacing */
+.moon-box #moon-phase-graphic {
+    margin-top: 0.2rem;
+}
+
+/* Power status color coding */
+
+#sys-power.power-ok {
+    color: #4caf50;
+}
+#sys-power.power-warn {
+    color: #ff9800;
+}
+#sys-power.power-bad {
+    color: #f44336;
+}
+
+/* ----- Responsive Layouts ----- */
+
+/* Phones & small tablets: break second row only */
+@media (max-width: 720px) {
+    .gauges.top-row {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .gauges.second-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Tiny devices: collapse everything */
+@media (max-width: 380px) {
+    .gauges.top-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Slight tightening for small screens */
+@media (max-width: 600px) {
+    body {
+        padding: 1rem;
+    }
+    h1 {
+        font-size: 1.4rem;
+    }
+    .gauge-group {
+        padding: 0.8rem;
+    }
+    .gauge-value {
+        font-size: 1.2rem;
+    }
+}

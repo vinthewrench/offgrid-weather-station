@@ -1,0 +1,14 @@
+services:
+    ws90:
+        build: .
+        container_name: ws90
+        restart: unless-stopped
+
+        # Simple hardware access: give it full USB for now
+        privileged: true
+
+        environment:
+            TZ: "America/Chicago"
+
+        ports:
+            - "7890:7890"

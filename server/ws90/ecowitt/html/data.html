@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Weather</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        <style>
+            :root {
+                color-scheme: dark;
+            }
+            body {
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    "Segoe UI",
+                    sans-serif;
+                background: #101015;
+                color: #eee;
+                margin: 0;
+                padding: 1rem;
+            }
+            h1 {
+                font-size: 1.8rem;
+                margin: 0 0 0.25rem 0;
+            }
+            .meta {
+                font-size: 0.9rem;
+                color: #aaa;
+                margin-bottom: 1rem;
+            }
+            .meta span {
+                margin-right: 1rem;
+            }
+            .cards {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                gap: 1rem;
+            }
+            .card {
+                background: #181822;
+                border-radius: 0.75rem;
+                padding: 0.75rem 0.9rem;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+            }
+            .card-header {
+                font-size: 0.85rem;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: #9aa0ff;
+                margin-bottom: 0.35rem;
+            }
+            .card-value {
+                font-size: 1.4rem;
+                font-weight: 600;
+            }
+            .card-sub {
+                font-size: 0.85rem;
+                color: #aaa;
+                margin-top: 0.2rem;
+            }
+            .top-bar {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                justify-content: space-between;
+                gap: 0.5rem;
+            }
+            button {
+                border-radius: 999px;
+                border: 1px solid #444;
+                padding: 0.25rem 0.9rem;
+                background: #202030;
+                color: #eee;
+                cursor: pointer;
+                font-size: 0.85rem;
+            }
+            button:hover {
+                background: #29293a;
+            }
+            @media (max-width: 480px) {
+                h1 {
+                    font-size: 1.4rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="top-bar">
+            <div>
+                <h1>Weather</h1>
+                <div class="meta">
+                    <span id="model"></span>
+                    <span id="sensor-id"></span>
+                </div>
+            </div>
+            <div>
+                <button id="refresh-btn">Refresh now</button>
+            </div>
+        </div>
+
+        <div class="meta">
+            <span id="last-time">Time: -</span>
+            <span id="age">Age: -</span>
+        </div>
+
+        <div class="cards">
+            <div class="card">
+                <div class="card-header">Temperature</div>
+                <div class="card-value" id="temp-val">-</div>
+                <div class="card-sub" id="temp-sub"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Humidity</div>
+                <div class="card-value" id="hum-val">-</div>
+                <div class="card-sub">Relative humidity</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Wind</div>
+                <div class="card-value" id="wind-val">-</div>
+                <div class="card-sub" id="wind-sub"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Rain (24 h)</div>
+                <div class="card-value" id="rain-24h">-</div>
+                <div class="card-sub" id="rain-total"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Light</div>
+                <div class="card-value" id="light-val">-</div>
+                <div class="card-sub" id="uvi-sub"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Power</div>
+                <div class="card-value" id="power-val">-</div>
+                <div class="card-sub" id="power-sub"></div>
+            </div>
+        </div>
+
+        <script>
+            // Hit the backend (nginx → weather-backend → weather:7890)
+            const ENDPOINT_URL = "/api/weather";
+            const POLL_MS = 10000; // 10 seconds
+
+            const modelEl = document.getElementById("model");
+            const idEl = document.getElementById("sensor-id");
+            const lastTimeEl = document.getElementById("last-time");
+            const ageEl = document.getElementById("age");
+
+            const tempValEl = document.getElementById("temp-val");
+            const tempSubEl = document.getElementById("temp-sub");
+            const humValEl = document.getElementById("hum-val");
+            const windValEl = document.getElementById("wind-val");
+            const windSubEl = document.getElementById("wind-sub");
+            const rain24El = document.getElementById("rain-24h");
+            const rainTotalEl = document.getElementById("rain-total");
+            const lightValEl = document.getElementById("light-val");
+            const uviSubEl = document.getElementById("uvi-sub");
+            const powerValEl = document.getElementById("power-val");
+            const powerSubEl = document.getElementById("power-sub");
+            const refreshBtn = document.getElementById("refresh-btn");
+
+            async function fetchData() {
+                try {
+                    const res = await fetch(ENDPOINT_URL, {
+                        cache: "no-store",
+                    });
+                    if (!res.ok) {
+                        throw new Error("HTTP " + res.status);
+                    }
+                    const data = await res.json();
+                    updateUI(data);
+                } catch (err) {
+                    console.error("Error talking to /api/weather:", err);
+                }
+            }
+
+            function updateUI(d) {
+                modelEl.textContent = d.model ? "Model: " + d.model : "";
+                idEl.textContent = d.id != null ? "Sensor ID: " + d.id : "";
+
+                // Time and age
+                if (d.time) {
+                    const t = new Date(d.time);
+                    if (!isNaN(t.getTime())) {
+                        lastTimeEl.textContent = "Time: " + t.toLocaleString();
+                        const ageSec = (Date.now() - t.getTime()) / 1000;
+                        ageEl.textContent = "Age: " + formatAge(ageSec);
+                    } else {
+                        lastTimeEl.textContent = "Time: " + d.time;
+                        ageEl.textContent = "Age: unknown";
+                    }
+                } else {
+                    lastTimeEl.textContent = "Time: -";
+                    ageEl.textContent = "Age: -";
+                }
+
+                // Temperature: C → F, display F only
+                if (typeof d.temperature_C === "number") {
+                    const c = d.temperature_C;
+                    const f = (c * 9) / 5 + 32;
+                    tempValEl.textContent = f.toFixed(1) + " °F";
+                    tempSubEl.textContent = "";
+                } else {
+                    tempValEl.textContent = "-";
+                    tempSubEl.textContent = "";
+                }
+
+                // Humidity
+                humValEl.textContent =
+                    d.humidity != null ? d.humidity + " %" : "-";
+
+                // Wind: avg mph main line, gust mph + dir sub line
+                const avg = d.wind_avg_m_s;
+                const max = d.wind_max_m_s;
+                const dir = d.wind_dir_deg;
+
+                if (typeof avg === "number" || typeof max === "number") {
+                    const avgMph =
+                        typeof avg === "number" ? avg * 2.2369363 : null;
+                    const maxMph =
+                        typeof max === "number" ? max * 2.2369363 : null;
+
+                    if (avgMph !== null) {
+                        windValEl.textContent = avgMph.toFixed(1) + " mph";
+                    } else if (maxMph !== null) {
+                        windValEl.textContent =
+                            "gust " + maxMph.toFixed(1) + " mph";
+                    } else {
+                        windValEl.textContent = "-";
+                    }
+
+                    const partsSub = [];
+                    if (maxMph !== null) {
+                        partsSub.push("gust " + maxMph.toFixed(1) + " mph");
+                    }
+                    if (typeof dir === "number") {
+                        partsSub.push("dir " + dir.toFixed(0) + "°");
+                    }
+                    windSubEl.textContent = partsSub.join(" · ");
+                } else {
+                    windValEl.textContent = "-";
+                    windSubEl.textContent = "";
+                }
+
+                // Rain: use backend-computed values
+                if (typeof d.rain_24h_in === "number") {
+                    rain24El.textContent = d.rain_24h_in.toFixed(2) + " in";
+                } else {
+                    rain24El.textContent = "-";
+                }
+
+                if (typeof d.rain_total_in === "number") {
+                    rainTotalEl.textContent =
+                        "Total " + d.rain_total_in.toFixed(2) + " in";
+                } else {
+                    rainTotalEl.textContent = "";
+                }
+
+                // Light: lux → foot-candles, UV index in sub
+                if (typeof d.light_lux === "number") {
+                    const fc = d.light_lux / 10.7639;
+                    lightValEl.textContent = fc.toFixed(1) + " fc";
+                } else {
+                    lightValEl.textContent = "-";
+                }
+                if (typeof d.uvi === "number") {
+                    uviSubEl.textContent = "UV index " + d.uvi.toFixed(1);
+                } else {
+                    uviSubEl.textContent = "";
+                }
+
+                // Power
+                const partsPower = [];
+                if (typeof d.battery_mV === "number") {
+                    partsPower.push(
+                        (d.battery_mV / 1000).toFixed(2) + " V battery",
+                    );
+                }
+                if (typeof d.supercap_V === "number") {
+                    partsPower.push(d.supercap_V.toFixed(2) + " V supercap");
+                }
+                powerValEl.textContent = partsPower.length
+                    ? partsPower[0]
+                    : "-";
+                powerSubEl.textContent =
+                    partsPower.slice(1).join(" · ") ||
+                    (d.battery_ok === 1 ? "Battery OK" : "");
+            }
+
+            function formatAge(sec) {
+                if (!isFinite(sec) || sec < 0) return "unknown";
+                if (sec < 60) return sec.toFixed(0) + " s";
+                const min = sec / 60;
+                if (min < 60) return min.toFixed(1) + " min";
+                const hr = min / 60;
+                return hr.toFixed(1) + " h";
+            }
+
+            refreshBtn.addEventListener("click", fetchData);
+
+            fetchData();
+            setInterval(fetchData, POLL_MS);
+        </script>
+    </body>
+</html>
